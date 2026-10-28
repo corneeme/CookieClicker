@@ -1,46 +1,41 @@
-name: Bundle to Single HTML
+name: Auto-Sync Cookie Clicker
 
 on:
+  schedule:
+    # Runs every Sunday at 00:00 UTC
+    - cron: '0 0 * * 0'
+  # Allows you to trigger the workflow manually from the Actions tab
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  bundle:
+  sync:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4.2.0
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          node-version: '22'
+          python-version: '3.x'
 
-      - name: Install SingleFile CLI
-        run: npm install -g single-file-cli
+      - name: Run Sync Script
+        run: python sync_cookie_clicker.py
 
-      - name: Bundle HTML and Assets
-        run: |
-          # 1. Ensure the destination directory exists (Fixes Exit Code 128)
-          mkdir -p dist
-
-          # 2. Run single-file CLI with sandbox disabled for headless execution in Linux
-          single-file index.html dist/cookie-clicker-single.html --browser-arg="--no-sandbox"
-
-      - name: Commit Bundled File
+      - name: Commit and Push Changes
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
           
-          # Stage the dist folder explicitly
-          git add dist/cookie-clicker-single.html
-          
+          # Check if there are changes before committing
           if git diff --staged --quiet; then
-            echo "No changes detected in bundle."
+            echo "No changes detected. Skipping commit."
           else
-            git commit -m "build: generate standalone single-file HTML"
+            git commit -m "chore: auto-sync latest Cookie Clicker files"
             git push
           fi

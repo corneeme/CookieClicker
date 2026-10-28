@@ -1,91 +1,70 @@
 const fs = require('fs');
 const path = require('path');
 
-// 1. All JS dependencies to package into memory
-const jsFiles = [
-  'main.js',
-  'minigameGarden.js',
-  'minigamePantheon.js',
-  'minigameGrimoire.js',
-  'minigameMarket.js',
-  'loc/EN.js' // English localization
-];
+const rootDir = __dirname;
 
-let dataURIs = {};
+// Helper to convert local assets to Base64 Data URIs
+function fileToDataURI(filePath) {
+    const ext = path.extname(filePath).toLowerCase();
+    let mimeType = 'text/plain';
+    
+    if (ext === '.png') mimeType = 'image/png';
+    else if (ext === '.jpg' || ext === '.jpeg') mimeType = 'image/jpeg';
+    else if (ext === '.mp3') mimeType = 'audio/mpeg';
+    else if (ext === '.ogg') mimeType = 'audio/ogg';
+    else if (ext === '.css') mimeType = 'text/css';
+    else if (ext === '.js') mimeType = 'text/javascript';
 
-// Read and encode JavaScript files
-jsFiles.forEach(file => {
-  if (fs.existsSync(file)) {
-    let content = fs.readFileSync(file, 'utf8');
+    const data = fs.readFileSync(filePath);
+    return `data:${mimeType};base64,${data.toString('base64')}`;
+}
 
-    // --- SEVER INTERNET CONNECTIONS & PATCH MAIN.JS ---
-    if (file === 'main.js') {
-      console.log('Patching main.js to run completely offline...');
+// 1. Read index.html
+let html = fs.readFileSync(path.join(rootDir, 'index.html'), 'utf8');
 
-      // Neutralize external analytics, ads, and update pings
-      content = content.replace(/https?:\/\/orteil\.dashnet\.org\/[^\s'"]+/g, '');
-      content = content.replace(/https?:\/\/www\.google-analytics\.com\/[^\s'"]+/g, '');
-
-      // Override dynamic script loading so it loads from local dataURIs instead of fetching over network
-      content = content.replace(
-        /App\.loadScript\s*=\s*function\s*\(([^)]+)\)\s*\{/g,
-        `App.loadScript = function(url, callback) {
-          const fileName = url.split('/').pop();
-          if (window.dataURIs && window.dataURIs[fileName]) {
-            const s = document.createElement('script');
-            s.src = window.dataURIs[fileName];
-            if (callback) s.onload = callback;
-            document.head.appendChild(s);
-            return;
-          }
-        `
-      );
-
-      // Prevent ajax/XHR network calls from throwing uncaught errors
-      content = content.replace(
-        /function ajax\(url,callback\)\{/g,
-        `function ajax(url,callback){ if(callback) callback(''); return false;`
-      );
+// 2. Inline CSS Files
+html = html.replace(/<link[^>]+href=["']([^"']+\.css)["'][^>]*>/gi, (match, cssPath) => {
+    const fullPath = path.join(rootDir, cssPath);
+    if (fs.existsSync(fullPath)) {
+        const cssContent = fs.readFileSync(fullPath, 'utf8');
+        return `<style>\n${cssContent}\n</style>`;
     }
-
-    const base64 = Buffer.from(content).toString('base64');
-    const keyName = path.basename(file);
-    dataURIs[keyName] = `data:text/javascript;base64,${base64}`;
-  }
+    return match;
 });
 
-// Read HTML & CSS
-const cssContent = fs.existsSync('style.css') ? fs.readFileSync('style.css', 'utf8') : '';
-const htmlBody = fs.existsSync('index.html') ? fs.readFileSync('index.html', 'utf8') : '';
+// 3. Read main.js into a plain text string instead of relying purely on dynamic async fetch
+const mainJsPath = path.join(rootDir, 'main.js');
+let mainJsContent = fs.readFileSync(mainJsPath, 'utf8');
 
-// Generate self-contained HTML
-const htmlOutput = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Cookie Clicker Offline</title>
-  <style>
-    ${cssContent}
-  </style>
-  <script>
-    // Store bundled scripts in global scope
-    window.dataURIs = ${JSON.stringify(dataURIs, null, 2)};
-
-    // Boot main game engine directly from memory
-    window.addEventListener('DOMContentLoaded', () => {
-      if (window.dataURIs['main.js']) {
-        const script = document.createElement('script');
-        script.src = window.dataURIs['main.js'];
-        document.head.appendChild(script);
+// 4. Inject a runtime loader hook directly before </body>
+const scriptInjection = `
+<script>
+  window.addEventListener('DOMContentLoaded', () => {
+    // Intercept LoadScript calls so Cookie Clicker loads local data URIs or inline code
+    const originalLoadScript = window.LoadScript;
+    window.LoadScript = function(url, callback) {
+      if (url === 'main.js') {
+        try {
+          ${mainJsContent}
+          if (callback) callback();
+        } catch (e) {
+          console.error('Error executing main.js:', e);
+        }
+      } else if (typeof originalLoadScript === 'function') {
+        originalLoadScript(url, callback);
       }
-    });
-  </script>
-</head>
-<body>
-  ${htmlBody}
-</body>
-</html>`;
+    };
 
-fs.mkdirSync('dist', { recursive: true });
-fs.writeFileSync('dist/cookie-clicker-standalone.html', htmlOutput);
-console.log('Successfully generated offline-isolated HTML file!');
+    // Auto-trigger game launch once DOM elements (like #game) exist
+    if (window.Game && window.Game.Init) {
+      window.Game.Init();
+    }
+  });
+</script>
+`;
+
+html = html.replace('</body>', `${scriptInjection}\n</body>`);
+
+// 5. Output bundled standalone file
+fs.writeFileSync(path.join(rootDir, 'cookie_clicker_standalone.html'), html);
+console.log('Successfully generated cookie_clicker_standalone.html');

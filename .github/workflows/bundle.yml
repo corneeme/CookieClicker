@@ -17,26 +17,26 @@ jobs:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install SingleFile CLI
-        run: npm install -g single-file-cli
+      - name: Install Chromium & SingleFile
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium-browser
+          npm install -g single-file-cli
 
       - name: Bundle HTML and Assets
         run: |
           mkdir -p dist
-          # Fix: Use --filename to specify the destination output file explicitly
-          single-file index.html --filename=dist/cookie-clicker-single.html --browser-arg="--no-sandbox"
+          # Run single-file pointing directly to the installed chromium binary
+          single-file index.html --filename=dist/cookie-clicker-single.html \
+            --browser-executable-path=/usr/bin/chromium-browser \
+            --browser-arg="--no-sandbox" \
+            --browser-arg="--disable-setuid-sandbox"
 
       - name: Commit and Push Bundled File
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          # Only attempt git add if the file actually generated
           if [ -f "dist/cookie-clicker-single.html" ]; then
             git add dist/cookie-clicker-single.html
             
@@ -47,6 +47,6 @@ jobs:
               git push origin ${{ github.ref_name }}
             fi
           else
-            echo "Error: Bundled file was not created by single-file CLI."
+            echo "Error: Bundled file was not created by single-file CLI."[cite: 2]
             exit 1
           fi

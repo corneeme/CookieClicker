@@ -1,0 +1,42 @@
+name: Bundle to Single HTML
+
+on:
+  # Allows manual triggering from the Actions tab
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install SingleFile CLI
+        run: npm install -g single-file-cli
+
+      - name: Bundle HTML and Assets
+        run: |
+          # Bundles index.html and its dependencies into a standalone file
+          single-file index.html dist/cookie-clicker-single.html --dump-content
+
+      - name: Commit Bundled File
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add dist/cookie-clicker-single.html
+          
+          if git diff --staged --quiet; then
+            echo "No changes detected in bundle."
+          else
+            git commit -m "build: generate standalone single-file HTML"
+            git push
+          fi

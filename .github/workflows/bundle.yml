@@ -1,7 +1,6 @@
 name: Bundle to Single HTML
 
 on:
-  # Allows manual triggering from the Actions tab
   workflow_dispatch:
 
 permissions:
@@ -13,25 +12,30 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v4.2.0
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install SingleFile CLI
         run: npm install -g single-file-cli
 
       - name: Bundle HTML and Assets
         run: |
-          # Bundles index.html and its dependencies into a standalone file
-          single-file index.html dist/cookie-clicker-single.html --dump-content
+          # 1. Ensure the destination directory exists (Fixes Exit Code 128)
+          mkdir -p dist
+
+          # 2. Run single-file CLI with sandbox disabled for headless execution in Linux
+          single-file index.html dist/cookie-clicker-single.html --browser-arg="--no-sandbox"
 
       - name: Commit Bundled File
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Stage the dist folder explicitly
           git add dist/cookie-clicker-single.html
           
           if git diff --staged --quiet; then

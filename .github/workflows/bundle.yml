@@ -1,4 +1,4 @@
-name: Bundle to Single HTML
+name: Bundle HTML
 
 on:
   workflow_dispatch:
@@ -17,36 +17,56 @@ jobs:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
 
-      - name: Install Chromium & SingleFile
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y chromium-browser
-          npm install -g single-file-cli
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
 
-      - name: Bundle HTML and Assets
+      - name: Build Single Playable HTML File
         run: |
           mkdir -p dist
-          # Fix: Correct positional syntax -> single-file [input] [output] [options]
-          single-file index.html dist/cookie-clicker-single.html \
-            --browser-executable-path=/usr/bin/chromium-browser \
-            --browser-arg="--no-sandbox" \
-            --browser-arg="--disable-setuid-sandbox"
+          cat << 'EOF' > build_standalone.js
+          const fs = require('fs');
+          const path = require('path');
 
-      - name: Commit and Push Bundled File
+          let html = fs.readFileSync('index.html', 'utf8');
+
+          // Inline style.css
+          if (fs.existsSync('style.css')) {
+            const css = fs.readFileSync('style.css', 'utf8');
+            html = html.replace(/<link[^>]+href=["']style\.css["'][^>]*>/i, `<style>${css}</style>`);
+          }
+
+          // Inline main.js
+          if (fs.existsSync('main.js')) {
+            const js = fs.readFileSync('main.js', 'utf8');
+            html = html.replace(/<script[^>]+src=["']main\.js["'][^>]*><\/script>/i, `<script>${js}</script>`);
+          }
+
+          // Point remote missing assets back to Orteil's live server so images/sounds don't 404 locally
+          html = html.replace(/<head>/i, '<head><base href="https://orteil.dashnet.org/cookieclicker/">');
+
+          fs.writeFileSync('dist/cookie-clicker-standalone.html', html);
+          console.log('Successfully generated standalone HTML file!');
+          EOF
+
+          node build_standalone.js
+
+      - name: Commit and Push Standalone HTML
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          if [ -f "dist/cookie-clicker-single.html" ]; then
-            git add dist/cookie-clicker-single.html
+          if [ -f "dist/cookie-clicker-standalone.html" ]; then
+            git add dist/cookie-clicker-standalone.html
             
             if git diff --staged --quiet; then
-              echo "No changes detected in bundle."
+              echo "No changes detected in build."
             else
-              git commit -m "build: generate standalone single-file HTML"
+              git commit -m "build: generate playable standalone html"
               git push origin ${{ github.ref_name }}
             fi
           else
-            echo "Error: Bundled file was not created by single-file CLI."
+            echo "Error: Output file was not generated."
             exit 1
           fi

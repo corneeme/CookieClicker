@@ -12,10 +12,14 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v5
+        with:
+          # Fetch full history and checkout the current branch (fixes detached HEAD / exit code 128)
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4.2.0
+        uses: actions/setup-node@v4
         with:
           node-version: '22'
 
@@ -24,23 +28,19 @@ jobs:
 
       - name: Bundle HTML and Assets
         run: |
-          # 1. Ensure the destination directory exists (Fixes Exit Code 128)
           mkdir -p dist
-
-          # 2. Run single-file CLI with sandbox disabled for headless execution in Linux
           single-file index.html dist/cookie-clicker-single.html --browser-arg="--no-sandbox"
 
-      - name: Commit Bundled File
+      - name: Commit and Push Bundled File
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          # Stage the dist folder explicitly
           git add dist/cookie-clicker-single.html
           
           if git diff --staged --quiet; then
             echo "No changes detected in bundle."
           else
             git commit -m "build: generate standalone single-file HTML"
-            git push
+            git push origin ${{ github.ref_name }}
           fi

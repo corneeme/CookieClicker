@@ -12,9 +12,8 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
         with:
-          # Fetch full history and checkout the current branch (fixes detached HEAD / exit code 128)
           ref: ${{ github.ref_name }}
           fetch-depth: 0
 
@@ -29,18 +28,25 @@ jobs:
       - name: Bundle HTML and Assets
         run: |
           mkdir -p dist
-          single-file index.html dist/cookie-clicker-single.html --browser-arg="--no-sandbox"
+          # Fix: Use --filename to specify the destination output file explicitly
+          single-file index.html --filename=dist/cookie-clicker-single.html --browser-arg="--no-sandbox"
 
       - name: Commit and Push Bundled File
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          git add dist/cookie-clicker-single.html
-          
-          if git diff --staged --quiet; then
-            echo "No changes detected in bundle."
+          # Only attempt git add if the file actually generated
+          if [ -f "dist/cookie-clicker-single.html" ]; then
+            git add dist/cookie-clicker-single.html
+            
+            if git diff --staged --quiet; then
+              echo "No changes detected in bundle."
+            else
+              git commit -m "build: generate standalone single-file HTML"
+              git push origin ${{ github.ref_name }}
+            fi
           else
-            git commit -m "build: generate standalone single-file HTML"
-            git push origin ${{ github.ref_name }}
+            echo "Error: Bundled file was not created by single-file CLI."
+            exit 1
           fi

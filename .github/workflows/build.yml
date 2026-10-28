@@ -1,0 +1,29 @@
+name: Build Singlefile HTML
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Run Singlefile Build Script
+      run: node build_base64_singlefile.js
+
+    - name: Commit and Push Generated File
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git add cookie_clicker_standalone.html
+        git commit -m "auto-build: update cookie_clicker_standalone.html" || exit 0
+        git push

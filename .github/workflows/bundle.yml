@@ -26,8 +26,8 @@ jobs:
       - name: Bundle HTML and Assets
         run: |
           mkdir -p dist
-          # Run single-file pointing directly to the installed chromium binary
-          single-file index.html --filename=dist/cookie-clicker-single.html \
+          # Fix: Correct positional syntax -> single-file [input] [output] [options]
+          single-file index.html dist/cookie-clicker-single.html \
             --browser-executable-path=/usr/bin/chromium-browser \
             --browser-arg="--no-sandbox" \
             --browser-arg="--disable-setuid-sandbox"
@@ -47,6 +47,6 @@ jobs:
               git push origin ${{ github.ref_name }}
             fi
           else
-            echo "Error: Bundled file was not created by single-file CLI."[cite: 2]
+            echo "Error: Bundled file was not created by single-file CLI."
             exit 1
           fi
